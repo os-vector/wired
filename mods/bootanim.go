@@ -12,7 +12,6 @@ import (
 
 	ba "github.com/os-vector/wired/raw"
 	"github.com/os-vector/wired/vars"
-	cp "github.com/otiai10/copy"
 )
 
 type BootAnim struct {
@@ -133,22 +132,18 @@ func (modu *BootAnim) Do(where string, in string) error {
 		return err
 	}
 	if reqIn.Default {
-		os.Remove(where + vars.VectorResources + "config/engine/animations/boot_anim.raw")
-		cp.Copy(vars.GetModDir(modu, where)+"orig_boot_anim.raw", where+vars.VectorResources+"config/engine/animations/boot_anim.raw")
+		os.Remove("/persist/boot_anim.raw")
 	} else {
 		gifBytes, err := base64.StdEncoding.DecodeString(reqIn.GifData)
 		if err != nil {
 			return err
 		}
 		os.Remove(where + "data/boot_anim_new.raw")
-		err = ba.GifToBootAnimation(gifBytes, where+"data/boot_anim_new.raw")
+		err = ba.GifToBootAnimation(gifBytes, "/persist/boot_anim.raw")
 		if err != nil {
-			os.Remove(where + "data/boot_anim_new.raw")
+			os.Remove("/persist/boot_anim.raw")
 			return err
 		}
-		os.Remove(where + vars.VectorResources + "config/engine/animations/boot_anim.raw")
-		cp.Copy(where+"data/boot_anim_new.raw", where+vars.VectorResources+"config/engine/animations/boot_anim.raw")
-		os.Remove(where + "data/boot_anim_new.raw")
 	}
 	modu.Save(where, in)
 	BootAnim_Current = moduin
