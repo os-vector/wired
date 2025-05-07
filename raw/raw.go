@@ -11,9 +11,23 @@ import (
 	"os"
 )
 
+func IsXray() bool {
+	f, err := os.Open("/dev/mmcblk0p29")
+	if err != nil {
+		fmt.Printf("hw_version.get: couldn't open EMR partition: %v\n", err)
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, 8*4)
+	f.Read(buf)
+	hwVer := binary.LittleEndian.Uint32(buf[4:8])
+	return hwVer >= 0x20
+}
+
 // adapted from timotew on github
 
-const SCREEN_WIDTH, SCREEN_HEIGHT = 184, 96 // 240,240 // 180,240
+const O_SCREEN_WIDTH, O_SCREEN_HEIGHT = 184, 96 // 240,240 // 180,240
+const M_SCREEN_WIDTH, M_SCREEN_HEIGHT = 160, 80 // 240,240 // 180,240
 
 // static image as single frame is quick to disappear compared to a gifs
 // extra frames gives them more stage time, anything below 30 may not be observed by humans
@@ -28,12 +42,26 @@ func convertPixesTo16BitRGB(c color.Color) uint16 {
 		(int(B>>3) << 0))
 }
 
+func SCREEN_WIDTH() int {
+	if IsXray() {
+		return M_SCREEN_WIDTH
+	}
+	return O_SCREEN_WIDTH
+}
+
+func SCREEN_HEIGHT() int {
+	if IsXray() {
+		return M_SCREEN_HEIGHT
+	}
+	return O_SCREEN_HEIGHT
+}
+
 func convertPixelsToRawBitmap(image *image.RGBA, bitmap []uint16) {
 	imgHeight, imgWidth := image.Bounds().Max.Y, image.Bounds().Max.X
 
 	for y := 0; y < imgHeight; y++ {
 		for x := 0; x < imgWidth; x++ {
-			bitmap[(y)*SCREEN_WIDTH+(x)] = convertPixesTo16BitRGB(image.At(x, y))
+			bitmap[(y)*SCREEN_WIDTH()+(x)] = convertPixesTo16BitRGB(image.At(x, y))
 		}
 	}
 }
@@ -43,7 +71,7 @@ func imagesToAnim(frames []*image.Paletted) []byte {
 	overpaintImage := image.NewRGBA(image.Rect(0, 0, frames[0].Bounds().Max.X, frames[0].Bounds().Max.Y))
 	draw.Draw(overpaintImage, overpaintImage.Bounds(), frames[0], image.Point{}, draw.Src)
 
-	bitmap := make([]uint16, SCREEN_WIDTH*SCREEN_HEIGHT)
+	bitmap := make([]uint16, SCREEN_WIDTH()*SCREEN_HEIGHT())
 	for _, srcImg := range frames {
 		draw.Draw(overpaintImage, overpaintImage.Bounds(), srcImg, image.Point{}, draw.Over)
 		convertPixelsToRawBitmap(overpaintImage, bitmap)
@@ -93,8 +121,8 @@ func GifToBootAnimation(gifFile []byte, output string) error {
 	}
 
 	imgWidth, imgHeight := getGifDimensions(gifImages)
-	if imgHeight != SCREEN_HEIGHT || imgWidth != SCREEN_WIDTH {
-		return fmt.Errorf("width %dpx height %dpx file is required", SCREEN_WIDTH, SCREEN_HEIGHT)
+	if imgHeight != SCREEN_HEIGHT() || imgWidth != SCREEN_WIDTH() {
+		return fmt.Errorf("width %dpx height %dpx file is required", SCREEN_WIDTH(), SCREEN_HEIGHT())
 	}
 
 	imgBytes := imagesToAnim(gifImages.Image)
